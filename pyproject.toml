@@ -1,6 +1,62 @@
+# pyproject.toml
+
 [build-system]
-requires = [
-    "setuptools>=54",
-    "wheel"
-]
+requires = ["setuptools>=75.6.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "Ooga-Booga-Python"
+version = "0.0.5"
+authors = [
+    { name = "Moritz" },
+]
+description = "A Python client for the Ooga Booga DEX aggregation and smart order routing REST API."
+readme = "README.md"
+requires-python = ">=3.9,<4.0"
+keywords = ["ooga", "booga", "berachain", "dex", "api", "client", "web3", "defi"]
+license = { text = "MIT License" }
+
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Blockchain",
+    "Topic :: Financial",
+]
+
+dependencies = [
+    "aiohttp~=3.11.9",
+    "pydantic~=2.10.2",
+    "web3~=7.6.0",
+    "eth-typing~=5.0.1",
+    "colorama~=0.4.6",
+    "python-dotenv~=1.0.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/1220moritz/Ooga_Booga_Python"
+"Bug Tracker" = "https://github.com/1220moritz/Ooga_Booga_Python/issues"
+"Documentation" = "https://docs.oogabooga.io/"
+
+[tool.setuptools]
+packages = ["ooga_booga_python"] # Explicitly declare your package(s)
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules --all-files --strict-markers"
+testpaths = ["tests"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = "~8.3.4"
+pytest-asyncio = "~0.24.0"
+python-dotenv = "~1.0.1"
+
+[tool.poetry.group.test.dependencies]
+pytest = "~8.3.4"
+pytest-asyncio = "~0.24.0"
+python-dotenv = "~1.0.1"

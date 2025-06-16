@@ -127,11 +127,13 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# IDEs and editors
+.idea
+**/.idea
+.vscode/
+
+
 # Pyre type checker
 .pyre/
-/.idea/.gitignore
-/.idea/.name
-/.idea/misc.xml
-/.idea/modules.xml
-/.idea/ooga_booga_python.iml
-/.idea/inspectionProfiles/profiles_settings.xml
+**/asd.py
+/poetry.lock

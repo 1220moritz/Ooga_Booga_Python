@@ -7,9 +7,9 @@
 [GitHub Repository](https://github.com/1220moritz/Ooga_Booga_Python)  
 [PyPI Package](https://pypi.org/project/Ooga-Booga-Python/)
 
-The **Ooga Booga Python Client** is a wrapper for the [Ooga Booga API V1](https://docs.oogabooga.io/api/), a powerful DEX aggregation and smart order routing REST API built to integrate Berachain's liquidity into your DApp or protocol. This client allows you to interact with Berachain's liquidity sources, including AMMs, bonding curves, and order books, to execute the best trades with minimal price impact.
+The **Ooga Booga Python Client** is a wrapper for the [Ooga Booga API V1](https://docs.oogabooga.io/), a powerful DEX aggregation and smart order routing REST API built to integrate Berachain's liquidity into your DApp or protocol. This client allows you to interact with Berachain's liquidity sources, including AMMs, bonding curves, and order books, to execute the best trades with minimal price impact.
 
-For more details on the API and its capabilities, refer to the official [Ooga Booga API Documentation](https://docs.oogabooga.io/api/).
+For more details on the API and its capabilities, refer to the official [Ooga Booga API Documentation](https://docs.oogabooga.io/).
 
 ## Features
 
@@ -81,19 +81,18 @@ PRIVATE_KEY="your-private-key"
 3. Install dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 ---
 
 ## Usage
 
-Here’s how to use the **Ooga Booga Python Client** in your project:
-
-### Initialize the Client
+Here’s how to use the **Ooga Booga Python Client**, demonstrating various functionalities from a single client initialization:
 
 ```python
 from ooga_booga_python.client import OogaBoogaClient
+from ooga_booga_python.models import SwapParams
 import asyncio
 from dotenv import load_dotenv
 import os
@@ -102,46 +101,62 @@ import os
 load_dotenv()
 
 async def main():
+    # Initialize the client once for all operations
     client = OogaBoogaClient(
         api_key=os.getenv("OOGA_BOOGA_API_KEY"),
         private_key=os.getenv("PRIVATE_KEY")
     )
-    # Example: Fetch token list
-    tokens = await client.get_token_list()
-    for token in tokens:
-        print(f"Name: {token.name}, Symbol: {token.symbol}")
 
-asyncio.run(main())
+    print("--- Initializing Client and Fetching Token List ---")
+    await fetch_token_list_example(client)
 
-```
+    print("\n--- Performing a Token Swap ---")
+    await perform_swap_example(client)
 
-### Perform a Token Swap
+    print("\n--- Getting Token Prices ---")
+    await fetch_prices_example(client)
 
-```python
-from ooga_booga_python.models import SwapParams
+async def fetch_token_list_example(client):
+    """
+    Fetches and prints the list of available tokens.
+    """
+    try:
+        tokens = await client.get_token_list()
+        for token in tokens:
+            print(f"Name: {token.name}, Symbol: {token.symbol}")
+    except Exception as e:
+        print(f"Failed to fetch token list: {e}")
 
-async def perform_swap(client):
+async def perform_swap_example(client):
+    """
+    Demonstrates how to perform a token swap.
+    """
     swap_params = SwapParams(
-        tokenIn="0xTokenInAddress",
+        tokenIn="0xTokenInAddress", # Replace with actual token address
         amount=1000000000000000000,  # 1 token in wei
-        tokenOut="0xTokenOutAddress",
-        to="0xYourWalletAddress",
+        tokenOut="0xTokenOutAddress", # Replace with actual token address
+        to="0xYourWalletAddress", # Replace with your wallet address
         slippage=0.02,
     )
-    await client.swap(swap_params)
+    try:
+        transaction_hash = await client.swap(swap_params)
+        print(f"Swap successful! Transaction Hash: {transaction_hash}")
+    except Exception as e:
+        print(f"Swap failed: {e}")
 
-asyncio.run(perform_swap(client))
-```
+async def fetch_prices_example(client):
+    """
+    Fetches and prints the prices of available tokens.
+    """
+    try:
+        prices = await client.get_token_prices()
+        for price in prices:
+            print(f"Token: {price.address}, Price: {price.price}")
+    except Exception as e:
+        print(f"Failed to fetch token prices: {e}")
 
-### Get Token Prices
-
-```python
-async def fetch_prices(client):
-    prices = await client.get_token_prices()
-    for price in prices:
-        print(f"Token: {price.address}, Price: {price.price}")
-
-asyncio.run(fetch_prices(client))
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ---
@@ -153,7 +168,7 @@ asyncio.run(fetch_prices(client))
 #### Initialization
 
 ```python
-client = OogaBoogaClient(api_key: str, private_key: str, rpc_url: str = "https://bartio.rpc.berachain.com/")
+client = OogaBoogaClient(api_key: str, private_key: str, rpc_url: str = "https://rpc.berachain.com/")
 ```
 
 - **`api_key`**: Your API key for authentication.
@@ -189,7 +204,7 @@ The package uses `pytest` for testing. To run the tests:
 1. Install test dependencies:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ```
 
 2. Run the tests:
