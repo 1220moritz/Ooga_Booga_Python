@@ -223,22 +223,8 @@ class PriceInfo(BaseModel):
     price: float
 
 
-class LiquiditySourcesResponse(RootModel[List[
-    Literal[
-        "KodiakV2",
-        "KodiakV3",
-        "Memeswap",
-        "HoldStation",
-        "Bulla",
-        "BeraswapComposableStable",
-        "BeraswapWeighted",
-        "HoneySwap",
-        "BurrBearMultiStable",
-        "Beradrome",
-        "Webera",
-        "KodiakPanda"
-    ]
-]]):
+class LiquiditySourcesResponse(RootModel[List[str]]):
     """
-    A Pydantic v2 RootModel that validates a JSON array of liquidity sources.
+    A Pydantic v2 RootModel that validates a JSON array of liquidity sources as a list of strings.
+    This allows for new liquidity sources to be added without requiring model updates.
     """
