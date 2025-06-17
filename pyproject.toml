@@ -29,12 +29,12 @@ classifiers = [
 ]
 
 dependencies = [
-    "aiohttp~=3.11.9",
-    "pydantic~=2.10.2",
-    "web3~=7.6.0",
-    "eth-typing~=5.0.1",
+    "aiohttp>=3.12.13,<4.0.0",
+    "pydantic>=2.11.7,<3.0.0",
+    "web3>=7.12.0,<8.0.0",
+    "eth-typing~=5.2.1",
     "colorama~=0.4.6",
-    "python-dotenv~=1.0.1",
+    "python-dotenv~=1.1.0",
 ]
 
 [project.urls]
@@ -52,9 +52,9 @@ testpaths = ["tests"]
 [tool.poetry.group.dev.dependencies]
 pytest = "~8.3.4"
 pytest-asyncio = "~0.24.0"
-python-dotenv = "~1.0.1"
+python-dotenv = "~1.1.0"
 
 [tool.poetry.group.test.dependencies]
 pytest = "~8.3.4"
 pytest-asyncio = "~0.24.0"
-python-dotenv = "~1.0.1"
+python-dotenv = "~1.1.0"

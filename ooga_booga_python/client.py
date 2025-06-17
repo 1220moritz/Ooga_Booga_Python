@@ -1,15 +1,14 @@
 from typing import List
-import aiohttp
-import asyncio
 
 from eth_typing import HexStr
 from web3 import Web3
 from web3.constants import MAX_INT, ADDRESS_ZERO
+from web3.exceptions import ContractCustomError
 from web3.types import TxParams
 
 from .custom_logger import get_logger
 from .constants import BASE_URL, CHAIN_ID
-from .exceptions import APIRequestError, APINotFoundError, APIRateLimitError, APIServerError
+from .http_client import HTTPClient
 from .models import (
     SwapParams,
     Token,
@@ -17,7 +16,7 @@ from .models import (
     AllowanceResponse,
     SwapResponse,
     PriceInfo,
-    LiquiditySourcesResponse, SuccessfulSwapResponse,
+    LiquiditySourcesResponse, SuccessfulSwapResponse, NoRouteResponse,
 )
 
 # Logging setup
@@ -60,67 +59,16 @@ class OogaBoogaClient:
         self.request_delay = request_delay
         self.base_url = BASE_URL
         self.headers = {"Authorization": f"Bearer {self.api_key}"}
+        self.http_client = HTTPClient(
+            headers=self.headers,
+            max_retries=5,
+            request_delay=1.0
+        )
 
         # Initialize Web3
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         self.account = self.w3.eth.account.from_key(private_key)
         self.address = self.account.address
-
-
-    async def _send_request(self, url: str, params: dict = None) -> dict:
-        """
-        Sends a GET request to the API and handles retries.
-
-        Args:
-            url (str): The endpoint URL.
-            params (dict, optional): Query parameters for the request.
-
-            Returns:
-                dict: JSON response data.
-
-            Raises:
-                APIRequestError: If the request fails after retries.
-        """
-        retry = 0
-        async with aiohttp.ClientSession() as session:
-            while retry < self.max_retries:
-                try:
-                    async with session.get(url, headers=self.headers, params=params) as response:
-                        if response.status == 200:
-                            return await response.json()
-                        elif response.status == 404:
-                            raise APINotFoundError(f"Resource not found at {url}.")
-                        elif response.status == 429:
-                            raise APIRateLimitError(f"Rate limit exceeded for {url}.")
-                        elif 500 <= response.status < 600:
-                            raise APIServerError(f"Server error: {response.status} at {url}.")
-                        else:
-                            retry = await self._handle_errors(response, retry)
-                except aiohttp.ClientError as e:
-                    logger.error(f"Client error occurred: {e}")
-                    retry += 1
-                    await asyncio.sleep(self.request_delay)
-        raise APIRequestError(f"Failed to fetch data from {url} after {self.max_retries} retries.")
-
-
-    async def _handle_errors(self, response: aiohttp.ClientResponse, retry: int) -> int:
-        """
-        Handles HTTP errors and logs them.
-
-        Args:
-            response (aiohttp.ClientResponse): The HTTP response object.
-            retry (int): Current retry count.
-
-        Returns:
-            int: Updated retry count.
-        """
-        logger.error(
-            f"HTTP error {response.status}: {await response.text()} at retry {retry}"
-        )
-        retry += 1
-        await asyncio.sleep(self.request_delay)
-        return retry
-
 
     async def _prepare_and_send_transaction(self, tx_params: TxParams) -> dict:
         """
@@ -157,13 +105,29 @@ class OogaBoogaClient:
             TxParams: The transaction parameters.
         """
         nonce = custom_nonce or self.w3.eth.get_transaction_count(self.address)
+        try:
+            gas = self.w3.eth.estimate_gas({"from": self.address, "to": to, "data": HexStr(data)})
+        except ContractCustomError as e:
+            # Extract the error selector (first 4 bytes)
+            error_data = e.args[0] if e.args else "Unknown"
+            logger.error(f"Contract execution would fail. Error selector: {error_data}")
+
+            # You can add specific error decoding based on known selectors
+            if error_data == "0xf4d678b8":
+                raise ValueError(
+                    "Swap would fail - possible reasons: insufficient balance, slippage too high, or invalid token pair")
+            else:
+                raise ValueError(f"Contract execution would fail with error: {error_data}")
+
+        except ValueError as e:
+            logger.error(f"Gas estimation failed: {e}")
+            raise e
+
         return {
             "from": self.address,
             "to": to,
             "data": HexStr(data),
-            "gas": self.w3.eth.estimate_gas(
-                {"from": self.address, "to": to, "data": HexStr(data)}
-            ),
+            "gas": gas,
             "value": Web3.to_wei(value, "wei"),
             "gasPrice": self.w3.eth.gas_price,
             "nonce": nonce,
@@ -179,7 +143,7 @@ class OogaBoogaClient:
             List[Token]: List of validated Token objects.
         """
         url = f"{self.base_url}/tokens"
-        response_data = await self._send_request(url)
+        response_data = await self.http_client.get(url)
         return [Token(**token) for token in response_data]
 
 
@@ -194,7 +158,7 @@ class OogaBoogaClient:
         url = f"{self.base_url}/swap"
         params = swap_params.model_dump(exclude_none=True)
         print(params)
-        response_data = await self._send_request(url, params)
+        response_data = await self.http_client.get(url, params)
         print(response_data)
         swap_tx = SuccessfulSwapResponse(**response_data).tx
 
@@ -218,7 +182,7 @@ class OogaBoogaClient:
         """
         url = f"{self.base_url}/approve"
         params = {"token": token, "amount": amount}
-        response_data = await self._send_request(url, params)
+        response_data = await self.http_client.get(url, params)
         approve_tx = ApproveResponse(**response_data).tx
 
         tx_params = await self._build_transaction(to=approve_tx.to, data=approve_tx.data, custom_nonce=custom_nonce)
@@ -244,7 +208,7 @@ class OogaBoogaClient:
 
         url = f"{self.base_url}/approve/allowance"
         params = {"from": from_address, "token": token}
-        response_data = await self._send_request(url, params)
+        response_data = await self.http_client.get(url, params)
         return AllowanceResponse(**response_data)
 
 
@@ -256,7 +220,7 @@ class OogaBoogaClient:
             List[PriceInfo]: A list of price information for tokens.
         """
         url = f"{self.base_url}/prices"
-        response_data = await self._send_request(url)
+        response_data = await self.http_client.get(url)
         return [PriceInfo(**price) for price in response_data]
 
 
@@ -268,7 +232,7 @@ class OogaBoogaClient:
             List[str]: List of liquidity source names.
         """
         url = f"{self.base_url}/liquidity-sources"
-        response_data = await self._send_request(url)
+        response_data = await self.http_client.get(url)
         parsed = LiquiditySourcesResponse.model_validate(response_data)
         return parsed.root
 
@@ -285,8 +249,9 @@ class OogaBoogaClient:
         """
         url = f"{self.base_url}/swap/"
         params = swap_params.model_dump(exclude_none=True)
-        response_data = await self._send_request(url, params)
+        response_data = await self.http_client.get(url, params)
 
         if response_data.get("status") == "NoWay":
-            return SwapResponse(response=response_data)
-        return SwapResponse(response=response_data)
+            return SwapResponse(response=NoRouteResponse(**response_data))
+        else:
+            return SwapResponse(response=SuccessfulSwapResponse(**response_data))

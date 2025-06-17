@@ -1,5 +1,5 @@
-from typing import List, Union, Optional, Literal
-from pydantic import BaseModel, RootModel
+from typing import List, Union, Optional
+from pydantic import BaseModel, RootModel, field_validator, Field
 
 
 class SwapParams(BaseModel):
@@ -7,9 +7,57 @@ class SwapParams(BaseModel):
     amount: int
     tokenOut: str
     to: str
-    slippage: float = 0.02
-    liquidity_sources: list[str] | None = None
+    slippage: float = Field(default=0.02, description="Slippage tolerance (0 < slippage <= 1)")
+    liquidity_sources: Optional[List[str]] = None
 
+    @field_validator('slippage')
+    @classmethod
+    def validate_slippage(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("Slippage must be greater than 0")
+        if v > 1.0:
+            raise ValueError(f"Slippage too high: {v}. Must be ≤ 1.0 (100%). Did you mean {v/100}?")
+        return v
+
+    @field_validator('tokenIn')
+    @classmethod
+    def validate_token_in(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise ValueError("tokenIn must be a string")
+        if not v.startswith('0x'):
+            raise ValueError("tokenIn must be a valid Ethereum address starting with 0x")
+        if len(v) != 42:
+            raise ValueError("tokenIn must be 42 characters long (including 0x prefix)")
+        return v
+
+    @field_validator('tokenOut')
+    @classmethod
+    def validate_token_out(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise ValueError("tokenOut must be a string")
+        if not v.startswith('0x'):
+            raise ValueError("tokenOut must be a valid Ethereum address starting with 0x")
+        if len(v) != 42:
+            raise ValueError("tokenOut must be 42 characters long (including 0x prefix)")
+        return v
+
+    @field_validator('to')
+    @classmethod
+    def validate_to(cls, v: str) -> str:
+        if not isinstance(v, str):
+            raise ValueError("to must be a string")
+        if not v.startswith('0x'):
+            raise ValueError("to must be a valid Ethereum address starting with 0x")
+        if len(v) != 42:
+            raise ValueError("to must be 42 characters long (including 0x prefix)")
+        return v
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("Amount must be greater than 0")
+        return v
 
 class Token(BaseModel):
     """

@@ -44,3 +44,10 @@ class APINotFoundError(Exception):
     """
     def __init__(self, message: str = "The requested resource was not found."):
         super().__init__(message)
+
+class APIValidationError(Exception):
+    """
+    Raised for API validation errors, such as invalid request parameters.
+    """
+    def __init__(self, message: str = "API request validation failed."):
+        super().__init__(message)

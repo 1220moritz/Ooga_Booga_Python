@@ -16,7 +16,7 @@ For more details on the API and its capabilities, refer to the official [Ooga Bo
 - **Find the Best Rates**: Get optimal real-time prices for your trades by leveraging Ooga Booga's liquidity aggregation.
 - **Simplified Integration**: A single API integration grants access to all liquidity sources on Berachain, saving you development time.
 - **Optimal Trade Execution**: Perform efficient trades with minimized price impact and maximum returns for your users.
-- **Enhanced Security**: Execute trades securely via Ooga Booga’s smart contract, which wraps each transaction.
+- **Enhanced Security**: Execute trades securely via Ooga Booga's smart contract, which wraps each transaction.
 - **Asynchronous API** calls using `aiohttp` for smooth, non-blocking operations.
 
 ## Features
@@ -42,26 +42,47 @@ For more details on the API and its capabilities, refer to the official [Ooga Bo
 
 ## Installation
 
-To install the Ooga-Booga-Python package, use pip. Run the following command in your terminal:
+### Poetry (Recommended)
+
+To install the Ooga-Booga-Python package using Poetry, run the following command in your terminal:
+
+```bash
+poetry add Ooga-Booga-Python
+```
+
+To upgrade the package to the latest version with Poetry:
+
+```bash
+poetry update Ooga-Booga-Python
+```
+
+If you prefer installing directly from the GitHub repository with Poetry:
+
+```bash
+poetry add git+https://github.com/1220moritz/Ooga_Booga_Python.git
+```
+
+### Pip
+
+Alternatively, you can install using pip:
 
 ```bash
 pip install Ooga-Booga-Python
 ```
 
-To upgrade the package to the latest version, run:
+To upgrade the package to the latest version with pip:
 
 ```bash
 pip install --upgrade Ooga-Booga-Python
 ```
 
-If you prefer installing directly from the GitHub repository, use:
+If you prefer installing directly from the GitHub repository with pip:
 
 ```bash
 pip install git+https://github.com/1220moritz/Ooga_Booga_Python.git
 ```
 
 ---
-
 
 ## Setup
 
@@ -80,6 +101,12 @@ PRIVATE_KEY="your-private-key"
 
 3. Install dependencies:
 
+**With Poetry (Recommended):**
+```bash
+poetry install --with dev
+```
+
+**With Pip:**
 ```bash
 pip install -e ".[dev]"
 ```
@@ -88,7 +115,7 @@ pip install -e ".[dev]"
 
 ## Usage
 
-Here’s how to use the **Ooga Booga Python Client**, demonstrating various functionalities from a single client initialization:
+Here's how to use the **Ooga Booga Python Client**, demonstrating various functionalities from a single client initialization:
 
 ```python
 from ooga_booga_python.client import OogaBoogaClient
@@ -203,6 +230,12 @@ The package uses `pytest` for testing. To run the tests:
 
 1. Install test dependencies:
 
+**With Poetry (Recommended):**
+```bash
+poetry install --with dev
+```
+
+**With Pip:**
 ```bash
 pip install -e ".[dev]"
 ```
