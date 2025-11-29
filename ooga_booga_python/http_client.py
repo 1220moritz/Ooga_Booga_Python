@@ -54,6 +54,38 @@ class HTTPClient:
                     await asyncio.sleep(self.request_delay)
         raise APIRequestError(f"Failed to fetch data from {url} after {self.max_retries} retries.")
 
+    async def post(self, url: str, json_data: Optional[Dict] = None) -> Union[Dict, List]:
+        """
+        Sends a POST request with retry logic.
+
+        Args:
+            url: The endpoint URL.
+            json_data: JSON payload for the request.
+
+        Returns:
+            Union[Dict, List]: JSON response data.
+
+        Raises:
+            APIRequestError: If the request fails after retries.
+            APIValidationError: For validation errors (422).
+            APINotFoundError: For 404 errors.
+            APIRateLimitError: For rate limit errors (429).
+            APIServerError: For server errors (5xx).
+        """
+        retry = 0
+        async with aiohttp.ClientSession() as session:
+            while retry < self.max_retries:
+                try:
+                    async with session.post(url, headers=self.headers, json=json_data) as response:
+                        return await self._handle_response(response, url)
+                except aiohttp.ClientError as e:
+                    if not self._should_retry_error(e):
+                        raise
+                    logger.error(f"Client error occurred: {e}")
+                    retry += 1
+                    await asyncio.sleep(self.request_delay)
+        raise APIRequestError(f"Failed to post data to {url} after {self.max_retries} retries.")
+
     async def _handle_response(self, response: aiohttp.ClientResponse, url: str) -> Union[Dict, List]:
         """Handle HTTP response based on status code."""
         if response.status == 200:

@@ -9,6 +9,7 @@ from web3.types import TxParams
 from .custom_logger import get_logger
 from .constants import BASE_URL, CHAIN_ID
 from .http_client import HTTPClient
+from .exceptions import decode_contract_error
 from .models import (
     SwapParams,
     Token,
@@ -64,6 +65,11 @@ class OogaBoogaClient:
             max_retries=5,
             request_delay=1.0
         )
+        self.rpc_http_client = HTTPClient(
+            headers={"Content-Type": "application/json"},
+            max_retries=5,
+            request_delay=1.0
+        )
 
         # Initialize Web3
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
@@ -105,34 +111,77 @@ class OogaBoogaClient:
             TxParams: The transaction parameters.
         """
         nonce = custom_nonce or self.w3.eth.get_transaction_count(self.address)
+        gas_price = self.w3.eth.gas_price
+        logger.debug(f"Gas price: {gas_price}")
+        logger.debug(f"Value: {value}")
+
         try:
-            gas = self.w3.eth.estimate_gas({"from": self.address, "to": to, "data": HexStr(data)})
-        except ContractCustomError as e:
-            # Extract the error selector (first 4 bytes)
-            error_data = e.args[0] if e.args else "Unknown"
-            logger.error(f"Contract execution would fail. Error selector: {error_data}")
-
-            # You can add specific error decoding based on known selectors
-            if error_data == "0xf4d678b8":
-                raise ValueError(
-                    "Swap would fail - possible reasons: insufficient balance, slippage too high, or invalid token pair")
-            else:
-                raise ValueError(f"Contract execution would fail with error: {error_data}")
-
-        except ValueError as e:
+            gas = await self._estimate_gas_rpc(to, data, value)
+        except Exception as e:
             logger.error(f"Gas estimation failed: {e}")
             raise e
 
+        logger.debug(f"Gas: {gas}, Gas Price: {self.w3.eth.gas_price}, Value: {value}")
         return {
             "from": self.address,
             "to": to,
             "data": HexStr(data),
             "gas": gas,
-            "value": Web3.to_wei(value, "wei"),
+            "value": value,
             "gasPrice": self.w3.eth.gas_price,
             "nonce": nonce,
             "chainId": CHAIN_ID,
         }
+
+    async def _estimate_gas_rpc(self, to: str, data: str, value: int) -> int:
+        """
+        Estimates gas using a direct JSON-RPC call.
+
+        Args:
+            to (str): The recipient address.
+            data (str): The transaction data.
+            value (int): The transaction value.
+
+        Returns:
+            int: The estimated gas.
+            
+        Raises:
+            ContractError: If the contract reverts with a known error
+            ValueError: If the RPC call fails for other reasons
+        """
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "eth_estimateGas",
+            "params": [
+                {
+                    "from": self.address,
+                    "to": to,
+                    "data": data,
+                    "value": hex(value)
+                }
+            ],
+            "id": 1
+        }
+
+        response = await self.rpc_http_client.post(self.rpc_url, payload)
+        
+        if "error" in response:
+            error_info = response['error']
+            
+            # Check if there's error data (contract revert)
+            if 'data' in error_info and error_info['data']:
+                error_data = error_info['data']
+                logger.error(f"Gas estimation failed: RPC Error: {error_info}")
+                
+                # Decode and raise the specific contract error
+                contract_error = decode_contract_error(error_data)
+                raise contract_error
+            else:
+                # Generic RPC error without contract data
+                raise ValueError(f"RPC Error: {error_info}")
+        
+        return int(response["result"], 16)
+
 
 
     async def get_token_list(self) -> List[Token]:
@@ -157,16 +206,17 @@ class OogaBoogaClient:
         """
         url = f"{self.base_url}/swap"
         params = swap_params.model_dump(exclude_none=True)
-        print(params)
+        logger.debug(params)
         response_data = await self.http_client.get(url, params)
-        print(response_data)
+        logger.debug(response_data)
         swap_tx = SuccessfulSwapResponse(**response_data).tx
 
-        value = 0 if swap_params.tokenIn != ADDRESS_ZERO else swap_tx.value
+        value = 0 if swap_params.tokenIn != ADDRESS_ZERO else int(swap_tx.value)
+        logger.debug(f"Value: {value}")
         tx_params = await self._build_transaction(
             to=swap_tx.to, data=swap_tx.data, value=value, custom_nonce=custom_nonce
         )
-
+        logger.debug(tx_params)
         logger.info("Submitting swap...")
         await self._prepare_and_send_transaction(tx_params)
 
