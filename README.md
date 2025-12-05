@@ -143,8 +143,11 @@ async def perform_swap_example(client):
         slippage=0.02,
     )
     try:
-        tx_hash = await client.swap(swap_params)
-        print(f"Swap successful! Hash: {tx_hash}")
+        receipt = await client.swap(swap_params)
+        if receipt.success:
+            print(f"Swap successful! Hash: {receipt.transactionHash}")
+        else:
+            print(f"Swap failed on-chain! Hash: {receipt.transactionHash}")
     except Exception as e:
         print(f"Swap failed: {e}")
 
@@ -174,8 +177,8 @@ client = OogaBoogaClient(
 | `get_token_list()` | Returns list of available tokens. |
 | `get_token_prices()` | Returns current token prices. |
 | `get_liquidity_sources()` | Returns all available liquidity sources. |
-| `swap(swap_params)` | Executes a token swap given `SwapParams`. |
-| `approve_allowance(token, amount)` | Approves token allowance for the router (default: MAX_INT). |
+| `swap(swap_params)` | Executes a token swap, returns `TransactionReceipt`. |
+| `approve_allowance(token, amount)` | Approves token allowance, returns `TransactionReceipt`. |
 | `get_token_allowance(address, token)` | Checks allowance for a specific address/token. |
 
 ---

@@ -18,6 +18,7 @@ from .models import (
     SwapResponse,
     PriceInfo,
     LiquiditySourcesResponse, SuccessfulSwapResponse, NoRouteResponse,
+    TransactionReceipt,
 )
 
 # Logging setup
@@ -76,7 +77,7 @@ class OogaBoogaClient:
         self.account = self.w3.eth.account.from_key(private_key)
         self.address = self.account.address
 
-    async def _prepare_and_send_transaction(self, tx_params: TxParams) -> dict:
+    async def _prepare_and_send_transaction(self, tx_params: TxParams) -> TransactionReceipt:
         """
         Prepares, signs, and sends a transaction, then waits for the receipt.
 
@@ -84,7 +85,7 @@ class OogaBoogaClient:
             tx_params (TxParams): The transaction parameters.
 
         Returns:
-            dict: The transaction receipt.
+            TransactionReceipt: The transaction receipt with statically-typed attributes.
 
         Raises:
             ValueError: If signing or sending fails
@@ -93,9 +94,10 @@ class OogaBoogaClient:
         signed_tx = self.account.sign_transaction(tx_params)
         tx_hash = self.w3.eth.send_raw_transaction(signed_tx.raw_transaction)
         rcpt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        receipt = TransactionReceipt.from_web3(dict(rcpt))
         logger.info(
-            f"Transaction complete: Transaction Hash: 0x{rcpt['transactionHash'].hex()}, Status: {rcpt['status']}")
-        return rcpt
+            f"Transaction complete: Transaction Hash: {receipt.transactionHash}, Status: {receipt.status}")
+        return receipt
 
 
     async def _build_transaction(self, to: str, data: str, value: int = 0, custom_nonce=None) -> TxParams:
@@ -196,13 +198,17 @@ class OogaBoogaClient:
         return [Token(**token) for token in response_data]
 
 
-    async def swap(self, swap_params: SwapParams, custom_nonce=None) -> None:
+    async def swap(self, swap_params: SwapParams, custom_nonce=None) -> TransactionReceipt:
         """
         Executes a token swap based on provided parameters.
 
         Args:
             swap_params (SwapParams): The swap parameters.
             custom_nonce (int, optional): Custom nonce for transaction ordering.
+
+        Returns:
+            TransactionReceipt: The transaction receipt. Use `receipt.success` or
+                               `receipt.status` to check if the transaction succeeded.
         """
         url = f"{self.base_url}/swap"
         params = swap_params.model_dump(exclude_none=True)
@@ -218,10 +224,10 @@ class OogaBoogaClient:
         )
         logger.debug(tx_params)
         logger.info("Submitting swap...")
-        await self._prepare_and_send_transaction(tx_params)
+        return await self._prepare_and_send_transaction(tx_params)
 
 
-    async def approve_allowance(self, token: str, amount: str = MAX_INT, custom_nonce=None) -> None:
+    async def approve_allowance(self, token: str, amount: str = MAX_INT, custom_nonce=None) -> TransactionReceipt:
         """
         Approves an allowance for a given token.
 
@@ -229,6 +235,10 @@ class OogaBoogaClient:
             token (str): The token address.
             amount (str, optional): The amount to approve. Defaults to MAX_INT.
             custom_nonce (int, optional): Custom nonce for transaction ordering.
+
+        Returns:
+            TransactionReceipt: The transaction receipt. Use `receipt.success` or
+                               `receipt.status` to check if the transaction succeeded.
         """
         url = f"{self.base_url}/approve"
         params = {"token": token, "amount": amount}
@@ -238,7 +248,7 @@ class OogaBoogaClient:
         tx_params = await self._build_transaction(to=approve_tx.to, data=approve_tx.data, custom_nonce=custom_nonce)
 
         logger.info(f"Approving token {token} with amount {amount}...")
-        await self._prepare_and_send_transaction(tx_params)
+        return await self._prepare_and_send_transaction(tx_params)
 
 
     async def get_token_allowance(self, from_address: str, token: str) -> AllowanceResponse:
