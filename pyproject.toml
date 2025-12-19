@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "Ooga-Booga-Python"
-version = "0.0.8"
+version = "0.0.9"
 authors = [
     { name = "Moritz" },
 ]
@@ -41,7 +41,11 @@ dependencies = [
 dev = [
     "pytest>=8.3.4,<9.0.0",
     "pytest-asyncio>=0.24.0,<1.0.0",
+    "ruff>=0.1.0,<1.0.0",
 ]
+
+[project.scripts]
+lint = "ooga_booga_python.scripts:lint"
 
 [project.urls]
 "Homepage" = "https://github.com/1220moritz/Ooga_Booga_Python"

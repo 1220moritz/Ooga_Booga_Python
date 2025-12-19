@@ -199,7 +199,12 @@ Contributions are welcome! Please fork the repository and submit a pull request.
 poetry install --with dev && poetry run pytest
 
 # uv
-uv sync && uv run pytest
+uv sync --extra dev && uv run pytest
+```
+
+**Running Linter:**
+```
+uv sync --extra dev && uv run lint
 ```
 
 ---

@@ -77,28 +77,6 @@ class Token(BaseModel):
     tokenURI: str
 
 
-class ApproveTransaction(BaseModel):
-    """
-    Pydantic model for the transaction details of an approval.
-
-    Attributes:
-        to (str): The EVM address to send the approval to.
-        data (str): Hex-encoded transaction data.
-    """
-    to: str
-    data: str
-
-
-class ApproveResponse(BaseModel):
-    """
-    Pydantic model for the response of an approval request.
-
-    Attributes:
-        tx (ApproveTransaction): The transaction details for the approval.
-    """
-    tx: ApproveTransaction
-
-
 class AllowanceResponse(BaseModel):
     """
     Pydantic model for the response of an allowance request.

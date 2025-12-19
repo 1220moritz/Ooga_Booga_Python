@@ -3,21 +3,21 @@ from typing import List
 from eth_typing import HexStr
 from web3 import Web3
 from web3.constants import MAX_INT, ADDRESS_ZERO
-from web3.exceptions import ContractCustomError
 from web3.types import TxParams
 
 from .custom_logger import get_logger
-from .constants import BASE_URL, CHAIN_ID
+from .constants import BASE_URL, CHAIN_ID, BERA_ADDRESS, WBERA_ADDRESS, ERC20_ABI
 from .http_client import HTTPClient
 from .exceptions import decode_contract_error
 from .models import (
     SwapParams,
     Token,
-    ApproveResponse,
     AllowanceResponse,
     SwapResponse,
     PriceInfo,
-    LiquiditySourcesResponse, SuccessfulSwapResponse, NoRouteResponse,
+    LiquiditySourcesResponse,
+    SuccessfulSwapResponse,
+    NoRouteResponse,
     TransactionReceipt,
 )
 
@@ -76,6 +76,7 @@ class OogaBoogaClient:
         self.w3 = Web3(Web3.HTTPProvider(rpc_url))
         self.account = self.w3.eth.account.from_key(private_key)
         self.address = self.account.address
+        self._router_address = None
 
     async def _prepare_and_send_transaction(self, tx_params: TxParams) -> TransactionReceipt:
         """
@@ -184,6 +185,63 @@ class OogaBoogaClient:
         
         return int(response["result"], 16)
 
+    def _get_erc20_contract(self, token_address: str):
+        """
+        Creates a Web3 contract instance for an ERC-20 token using the standard ABI.
+        
+        Args:
+            token_address (str): The token address.
+            
+        Returns:
+            Contract: The Web3 contract instance.
+        """
+        if not isinstance(token_address, str):
+            raise ValueError("Token address must be a string")
+        if not token_address.startswith('0x'):
+            raise ValueError("Token address must be a valid Ethereum address starting with 0x")
+        if len(token_address) != 42:
+            raise ValueError("Token address must be 42 characters long (including 0x prefix)")
+            
+        return self.w3.eth.contract(address=token_address, abi=ERC20_ABI)
+
+    async def _get_router_address(self) -> str:
+        """
+        Fetches the router address by performing a dummy swap if not already cached.
+
+        Returns:
+            str: The router address.
+        """
+        if self._router_address:
+            return self._router_address
+
+        # Dummy swap BERA -> wBERA to get router address
+        swap_params = SwapParams(
+            tokenIn=BERA_ADDRESS,
+            tokenOut=WBERA_ADDRESS,
+            amount=1,  # Smallest possible amount
+            to=self.address
+        )
+        
+        logger.debug("Fetching router address with dummy swap info...")
+        try:
+            swap_info = await self.get_swap_infos(swap_params)
+            
+            if isinstance(swap_info.response, SuccessfulSwapResponse):
+                if swap_info.response.routerAddr:
+                    self._router_address = swap_info.response.routerAddr
+                    logger.info(f"Router address fetched: {self._router_address}")
+                    return self._router_address
+                elif swap_info.response.tx and swap_info.response.tx.to:
+                     # Fallback to tx.to if routerAddr is missing but we have a tx
+                    self._router_address = swap_info.response.tx.to
+                    logger.info(f"Router address fetched from tx.to: {self._router_address}")
+                    return self._router_address
+            
+            raise ValueError("Could not determine router address from dummy swap response")
+
+        except Exception as e:
+            logger.error(f"Failed to fetch router address: {e}")
+            raise
 
 
     async def get_token_list(self) -> List[Token]:
@@ -210,6 +268,9 @@ class OogaBoogaClient:
             TransactionReceipt: The transaction receipt. Use `receipt.success` or
                                `receipt.status` to check if the transaction succeeded.
         """
+        if swap_params.tokenIn == swap_params.tokenOut:
+            raise ValueError("Circular swaps not allowed: tokenIn and tokenOut must be different")
+
         url = f"{self.base_url}/swap"
         params = swap_params.model_dump(exclude_none=True)
         logger.debug(params)
@@ -227,9 +288,9 @@ class OogaBoogaClient:
         return await self._prepare_and_send_transaction(tx_params)
 
 
-    async def approve_allowance(self, token: str, amount: str = MAX_INT, custom_nonce=None) -> TransactionReceipt:
+    async def approve_allowance(self, token: str, amount: str = str(MAX_INT), custom_nonce=None) -> TransactionReceipt:
         """
-        Approves an allowance for a given token.
+        Approves an allowance for a given token using direct ERC-20 contract call.
 
         Args:
             token (str): The token address.
@@ -240,20 +301,28 @@ class OogaBoogaClient:
             TransactionReceipt: The transaction receipt. Use `receipt.success` or
                                `receipt.status` to check if the transaction succeeded.
         """
-        url = f"{self.base_url}/approve"
-        params = {"token": token, "amount": amount}
-        response_data = await self.http_client.get(url, params)
-        approve_tx = ApproveResponse(**response_data).tx
+        router_address = await self._get_router_address()
+        contract = self._get_erc20_contract(token)
+        
+        # Build transaction data
+        tx_data = contract.encode_abi(
+            "approve", 
+            args=[router_address, int(str(amount), 0)]
+        )
+        
+        tx_params = await self._build_transaction(
+            to=token, 
+            data=tx_data, 
+            custom_nonce=custom_nonce
+        )
 
-        tx_params = await self._build_transaction(to=approve_tx.to, data=approve_tx.data, custom_nonce=custom_nonce)
-
-        logger.info(f"Approving token {token} with amount {amount}...")
+        logger.info(f"Approving token {token} for spender {router_address} with amount {amount}...")
         return await self._prepare_and_send_transaction(tx_params)
 
 
     async def get_token_allowance(self, from_address: str, token: str) -> AllowanceResponse:
         """
-        Fetches the allowance of a token for a specific address.
+        Fetches the allowance of a token for a specific address using direct ERC-20 contract call.
 
         Args:
             from_address (str): The address to check allowance for.
@@ -262,14 +331,16 @@ class OogaBoogaClient:
         Returns:
             AllowanceResponse: The allowance details.
         """
-
         if token == ADDRESS_ZERO:
             return AllowanceResponse(allowance=str(MAX_INT))
-
-        url = f"{self.base_url}/approve/allowance"
-        params = {"from": from_address, "token": token}
-        response_data = await self.http_client.get(url, params)
-        return AllowanceResponse(**response_data)
+            
+        router_address = await self._get_router_address()
+        contract = self._get_erc20_contract(token)
+        
+        # Call allowance function
+        allowance = contract.functions.allowance(from_address, router_address).call()
+        
+        return AllowanceResponse(allowance=str(allowance))
 
 
     async def get_token_prices(self) -> List[PriceInfo]:
